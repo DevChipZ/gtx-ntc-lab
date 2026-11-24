@@ -11,7 +11,7 @@ import torch.nn.functional as F
 
 from grid_ntc import GridTextureNTC
 from ntc_bench import make_test_texture, psnr_db
-from vram_budget import plan_vram_budget
+from vram_budget import TextureAsset, plan_vram_budget
 
 
 def benchmark_single(
@@ -115,10 +115,10 @@ def run_batch(
         )
 
     assets = [
-        {"name": r["name"], "priority": idx + 1, "base_mb": r["est_vram_mb"]}
+        TextureAsset(name=r["name"], width=size, height=size, channels=4, bytes_per_channel=1, priority=idx + 1)
         for idx, r in enumerate(results)
     ]
-    plan = plan_vram_budget(assets, cap_mb=vram_cap_mb)
+    plan = plan_vram_budget(assets, vram_cap_mb=vram_cap_mb)
     print("VRAM Budget Plan:", plan)
 
 
@@ -131,3 +131,4 @@ if __name__ == "__main__":
     parser.add_argument("--vram-cap-mb", type=float, default=3500.0, help="Safe VRAM budget cap in MB")
     args = parser.parse_args()
     run_batch(args.images_dir, args.size, args.grid_size, args.steps, args.vram_cap_mb)
+
