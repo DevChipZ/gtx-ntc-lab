@@ -22,3 +22,5 @@ jobs:
         run: python prototype/vram_budget.py
       - name: Run 4-channel bundle smoke test
         run: python prototype/bundle_bench.py --size 64 --steps 25 --hidden-dim 16
+      - name: Run DDS export smoke test
+        run: python prototype/dds_export.py --size 64 --out test_out.dds
