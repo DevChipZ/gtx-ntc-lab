@@ -11,7 +11,33 @@ import torch
 import torch.nn as nn
 
 from dds_export import write_dds_rgba8
-from ntc_bench import TinyTextureMLP, make_test_texture, psnr_db
+from ntc_bench import make_test_texture, psnr_db
+
+
+class FourierTextureMLP(nn.Module):
+    def __init__(self, hidden_dim: int = 128, num_frequencies: int = 64, sigma: float = 10.0):
+        super().__init__()
+        # Fixed Gaussian frequency matrix B so the network can learn sharp edges
+        torch.manual_seed(42)
+        B = torch.randn(2, num_frequencies) * sigma
+        self.register_buffer("B", B)
+
+        in_dim = num_frequencies * 2
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 3),
+        )
+
+    def encode(self, coords: torch.Tensor) -> torch.Tensor:
+        proj = (2.0 * math.pi) * (coords @ self.B)
+        return torch.cat([torch.sin(proj), torch.cos(proj)], dim=-1)
+
+    def forward(self, coords: torch.Tensor) -> torch.Tensor:
+        features = self.encode(coords)
+        return torch.sigmoid(self.net(features))
 
 
 def run_ntc_to_dds(
@@ -20,6 +46,7 @@ def run_ntc_to_dds(
     size: int,
     steps: int,
     hidden_dim: int,
+    sigma: float,
     vram_cap_mb: float,
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -39,8 +66,8 @@ def run_ntc_to_dds(
     coords = torch.stack([grid_x.reshape(-1), grid_y.reshape(-1)], dim=-1)
     target_t = torch.from_numpy(target_np.astype(np.float32) / 255.0).to(device).reshape(-1, 3)
 
-    model = TinyTextureMLP(hidden_dim=hidden_dim).to(device)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-2)
+    model = FourierTextureMLP(hidden_dim=hidden_dim, num_frequencies=64, sigma=sigma).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-3)
 
     model.train()
     for _ in range(steps):
@@ -85,12 +112,13 @@ def run_ntc_to_dds(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train/decode NTC texture and export DDS")
+    parser = argparse.ArgumentParser(description="Train/decode Fourier NTC texture and export DDS")
     parser.add_argument("--image", type=str, default=None, help="Optional input RGB image path")
     parser.add_argument("--out", type=str, default="ntc_recon.dds", help="Output .dds path")
-    parser.add_argument("--size", type=int, default=128, help="Working square resolution")
-    parser.add_argument("--steps", type=int, default=150, help="Training steps")
-    parser.add_argument("--hidden-dim", type=int, default=32, help="Hidden MLP width")
+    parser.add_argument("--size", type=int, default=256, help="Working square resolution")
+    parser.add_argument("--steps", type=int, default=1500, help="Training steps")
+    parser.add_argument("--hidden-dim", type=int, default=128, help="Hidden MLP width")
+    parser.add_argument("--sigma", type=float, default=10.0, help="Fourier frequency bandwidth")
     parser.add_argument("--vram-cap-mb", type=float, default=3500.0, help="Safe VRAM budget cap in MB")
     args = parser.parse_args()
     run_ntc_to_dds(
@@ -99,5 +127,6 @@ if __name__ == "__main__":
         args.size,
         args.steps,
         args.hidden_dim,
+        args.sigma,
         args.vram_cap_mb,
     )
