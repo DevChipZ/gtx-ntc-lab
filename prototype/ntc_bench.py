@@ -1,6 +1,8 @@
 import argparse
+import io
 import math
 import time
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -46,7 +48,20 @@ def psnr_db(orig: np.ndarray, recon: np.ndarray) -> float:
     return 20.0 * math.log10(255.0 / math.sqrt(mse))
 
 
-def run_bench(image_path: str | None, size: int, steps: int, hidden_dim: int, vram_cap_mb: float):
+def compressed_weights_bytes(model: nn.Module) -> int:
+    buf = io.BytesIO()
+    torch.save(model.state_dict(), buf)
+    return len(zlib.compress(buf.getvalue(), level=6))
+
+
+def run_bench(
+    image_path: str | None,
+    size: int,
+    steps: int,
+    hidden_dim: int,
+    vram_cap_mb: float,
+    save_preview: bool,
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if image_path and Path(image_path).exists():
@@ -86,8 +101,8 @@ def run_bench(image_path: str | None, size: int, steps: int, hidden_dim: int, vr
     decode_ms = (time.perf_counter() - t0) * 1000.0
 
     recon_np = np.clip(recon_t.detach().cpu().numpy() * 255.0, 0, 255).astype(np.uint8)
-    weight_bytes = sum(p.numel() * p.element_size() for p in model.parameters())
-    ratio = raw_bytes / max(weight_bytes, 1)
+    packed_bytes = compressed_weights_bytes(model)
+    ratio = raw_bytes / max(packed_bytes, 1)
     score_psnr = psnr_db(target_np, recon_np)
 
     vram_info = "CPU-only mode"
@@ -101,8 +116,14 @@ def run_bench(image_path: str | None, size: int, steps: int, hidden_dim: int, vr
         )
 
     print(f"Device: {device} ({vram_info})")
-    print(f"Texture: {w}x{h} RGB | Raw={raw_bytes} B | Weights={weight_bytes} B | Ratio={ratio:.2f}x")
+    print(f"Texture: {w}x{h} RGB | Raw={raw_bytes} B | PackedWeights={packed_bytes} B | Ratio={ratio:.2f}x")
     print(f"Decode time: {decode_ms:.2f} ms | PSNR: {score_psnr:.2f} dB")
+
+    if save_preview:
+        side_by_side = np.concatenate([target_np, recon_np], axis=1)
+        out_path = Path("recon_preview.png")
+        Image.fromarray(side_by_side).save(out_path)
+        print(f"Saved preview: {out_path.resolve()}")
 
 
 if __name__ == "__main__":
@@ -112,5 +133,13 @@ if __name__ == "__main__":
     parser.add_argument("--steps", type=int, default=150, help="Training steps for quick prototype test")
     parser.add_argument("--hidden-dim", type=int, default=32, help="Hidden MLP width")
     parser.add_argument("--vram-cap-mb", type=float, default=3500.0, help="Safe VRAM budget cap in MB")
+    parser.add_argument("--save-preview", action="store_true", help="Save side-by-side target vs recon PNG")
     args = parser.parse_args()
-    run_bench(args.image, args.size, args.steps, args.hidden_dim, args.vram_cap_mb)
+    run_bench(
+        args.image,
+        args.size,
+        args.steps,
+        args.hidden_dim,
+        args.vram_cap_mb,
+        args.save_preview,
+    )
