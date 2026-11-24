@@ -24,3 +24,5 @@ jobs:
         run: python prototype/bundle_bench.py --size 64 --steps 25 --hidden-dim 16
       - name: Run DDS export smoke test
         run: python prototype/dds_export.py --size 64 --out test_out.dds
+      - name: Run NTC-to-DDS pipeline smoke test
+        run: PYTHONPATH=prototype python prototype/ntc_to_dds.py --size 64 --steps 25 --hidden-dim 16 --out ntc_test.dds
