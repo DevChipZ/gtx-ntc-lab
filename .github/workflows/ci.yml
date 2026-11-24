@@ -18,3 +18,5 @@ jobs:
         run: pip install -r requirements.txt
       - name: Run quick benchmark smoke test
         run: python prototype/ntc_bench.py --size 64 --steps 25 --hidden-dim 16
+      - name: Run VRAM budget planner check
+        run: python prototype/vram_budget.py
