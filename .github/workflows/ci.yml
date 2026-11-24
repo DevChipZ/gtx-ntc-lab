@@ -26,3 +26,6 @@ jobs:
         run: python prototype/dds_export.py --size 64 --out test_out.dds
       - name: Run NTC-to-DDS pipeline smoke test
         run: PYTHONPATH=prototype python prototype/ntc_to_dds.py --size 64 --steps 25 --hidden-dim 16 --out ntc_test.dds
+
+      - name: Run batch NTC + VRAM budget smoke test
+        run: PYTHONPATH=prototype python prototype/batch_bench.py --size 128 --grid-size 32 --steps 20 --vram-cap-mb 3500
