@@ -1,0 +1,20 @@
+name: NTC Prototype CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run quick benchmark smoke test
+        run: python prototype/ntc_bench.py --size 64 --steps 25 --hidden-dim 16
