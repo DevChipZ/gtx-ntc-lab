@@ -1,2 +1,5 @@
 # gtx-ntc-lab
-Experimental Neural Texture Compression (NTC) &amp; BCn transcoding prototype with VRAM budgeting for GTX GPUs.
+
+Experimental Neural Texture Compression (NTC) benchmarking and VRAM budget planning for GTX GPUs[cite: 2, 4].
+
+## Quick Start
